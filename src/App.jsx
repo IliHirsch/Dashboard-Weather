@@ -30,7 +30,9 @@ const StatPanel = ({ label, value, unit, detail, icon: Icon }) => (
       <span className="h-[1px] w-10 bg-gradient-to-r from-transparent via-[#2a2a3d] to-transparent" />
     </div>
     <div className="flex items-end gap-1">
-      <span className="text-2xl font-semibold text-white">{value}</span>
+      <span className="text-xl md:text-2xl font-semibold text-white">
+        {value}
+      </span>
       {unit && <span className="text-xs text-[#b8a7ff]">{unit}</span>}
     </div>
     {detail && (
@@ -210,10 +212,10 @@ function App() {
     : new Date()
 
   return (
-    <div className="flex min-h-screen w-screen bg-[#080810] text-white overflow-hidden">
-      <main className="flex-1 max-w-6xl mx-auto grid grid-cols-3 gap-6 p-6">
+    <div className="flex min-h-screen w-screen bg-[#080810] text-white overflow-x-hidden overflow-y-auto">
+      <main className="flex-1 max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 p-4 md:p-6">
         {/* Left column - Next 7 days */}
-        <section className="flex h-full flex-col gap-4 rounded-3xl bg-[#0f0f1a] border border-[#1b1b2a] px-5 py-4">
+        <section className="flex h-full flex-col gap-4 order-3 md:order-1 rounded-3xl bg-[#0f0f1a] border border-[#1b1b2a] px-5 py-4">
           <header className="flex items-center justify-between mb-1">
             <div className="flex flex-col">
               <span className="text-[11px] tracking-[0.24em] uppercase text-[#8f8fb0]">
@@ -236,7 +238,7 @@ function App() {
                     <span className="w-10 text-xs tracking-[0.22em] text-[#8f8fb0]">
                       {day.day}
                     </span>
-                    <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[#00b4fc] to-[#9b5de5]">
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[#00b4fc] to-[#9b5de5]">
                       <Icon className="h-4 w-4 text-white" />
                     </div>
                   </div>
@@ -265,7 +267,7 @@ function App() {
         </section>
 
         {/* Center column - Temperature gauge */}
-        <section className="relative flex flex-col items-center justify-center rounded-3xl bg-[#0f0f1a] border border-[#1b1b2a] px-6 py-6 shadow-[0_0_80px_rgba(0,180,252,0.32)] overflow-hidden">
+        <section className="relative flex flex-col items-center justify-center order-1 md:order-2 rounded-3xl bg-[#0f0f1a] border border-[#1b1b2a] px-6 py-6 shadow-[0_0_80px_rgba(0,180,252,0.32)] overflow-hidden">
           <div className="pointer-events-none absolute inset-0 opacity-40">
             <div className="absolute -left-10 -top-10 h-40 w-40 rounded-full bg-[#00b4fc33] blur-3xl" />
             <div className="absolute -right-10 -bottom-10 h-48 w-48 rounded-full bg-[#9b5de533] blur-3xl" />
@@ -344,7 +346,7 @@ function App() {
                     </span>
                   </div>
                   <div className="mt-2 flex items-end">
-                    <span className="text-4xl font-semibold text-white">
+                    <span className="text-3xl md:text-4xl font-semibold text-white">
                       {currentTemp != null ? Math.round(currentTemp) : '—'}
                     </span>
                     <span className="ml-1 text-sm text-[#b8a7ff]">°C</span>
@@ -357,10 +359,10 @@ function App() {
             </div>
 
             <div className="mt-6 flex flex-col items-center gap-1">
-              <span className="text-xs tracking-[0.24em] uppercase text-[#8f8fb0]">
+              <span className="text-[11px] md:text-xs tracking-[0.24em] uppercase text-[#8f8fb0]">
                 {condition}
               </span>
-              <div className="flex items-center gap-2 text-sm text-[#b8a7ff]">
+              <div className="flex items-center gap-2 text-xs md:text-sm text-[#b8a7ff]">
                 <SunMedium className="h-4 w-4 text-[#ffdd7a]" />
                 <span>Visibility good • Stable conditions</span>
               </div>
@@ -369,7 +371,7 @@ function App() {
         </section>
 
         {/* Right column - Instrument cluster */}
-        <section className="flex h-full flex-col gap-4 rounded-3xl bg-[#0f0f1a] border border-[#1b1b2a] px-5 py-4">
+        <section className="flex h-full flex-col gap-4 order-2 md:order-3 rounded-3xl bg-[#0f0f1a] border border-[#1b1b2a] px-5 py-4">
           <div className="grid grid-cols-2 gap-3">
             <StatPanel
               label="Humidity"
