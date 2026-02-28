@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   CloudSun,
   CloudRain,
@@ -13,32 +13,12 @@ import {
   CalendarDays,
 } from 'lucide-react'
 
-const DAILY_FORECAST = [
-  { day: 'MON', high: 23, low: 15, icon: CloudSun },
-  { day: 'TUE', high: 25, low: 16, icon: Sun },
-  { day: 'WED', high: 21, low: 14, icon: CloudRain },
-  { day: 'THU', high: 24, low: 17, icon: CloudSun },
-  { day: 'FRI', high: 26, low: 18, icon: Sun },
-  { day: 'SAT', high: 27, low: 19, icon: CloudSun },
-  { day: 'SUN', high: 22, low: 16, icon: CloudRain },
-]
-
-const MIN_TEMP = 8
-const MAX_TEMP = 32
-const CURRENT_TEMP = 22
-
-const CITY = 'Berlin'
-const COUNTRY = 'Germany'
-const CONDITION = 'Partly cloudy'
-
 const formatDate = (date) =>
   new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
   }).format(date)
-
-const today = new Date()
 
 const StatPanel = ({ label, value, unit, detail, icon: Icon }) => (
   <div className="relative flex flex-col gap-2 rounded-2xl bg-[#090913] px-4 py-3 border border-[#1b1b2a]">
@@ -61,9 +41,173 @@ const StatPanel = ({ label, value, unit, detail, icon: Icon }) => (
 )
 
 function App() {
-  const range = MAX_TEMP - MIN_TEMP
-  const clamped = Math.min(Math.max(CURRENT_TEMP - MIN_TEMP, 0), range)
-  const progress = range === 0 ? 0 : clamped / range
+  const [currentWeather, setCurrentWeather] = useState(null)
+  const [forecast, setForecast] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const apiKey = import.meta.env.VITE_WEATHER_API_KEY
+
+    if (!apiKey) {
+      setError('Missing OpenWeather API key')
+      setLoading(false)
+      return
+    }
+
+    const fetchWeather = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        const currentUrl = `https://api.openweathermap.org/data/2.5/weather?q=Berlin&appid=${apiKey}&units=metric`
+        const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=Berlin&appid=${apiKey}&units=metric`
+
+        const [currentRes, forecastRes] = await Promise.all([
+          fetch(currentUrl),
+          fetch(forecastUrl),
+        ])
+
+        if (!currentRes.ok || !forecastRes.ok) {
+          throw new Error('Network response was not ok')
+        }
+
+        const currentData = await currentRes.json()
+        const forecastData = await forecastRes.json()
+
+        setCurrentWeather(currentData)
+        setForecast(forecastData)
+      } catch (err) {
+        setError('Failed to load weather data')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchWeather()
+  }, [])
+
+  const city = currentWeather?.name || '—'
+  const country = currentWeather?.sys?.country || ''
+  const condition =
+    currentWeather?.weather?.[0]?.description || 'Waiting for data'
+
+  const currentTemp = currentWeather?.main?.temp ?? null
+  const feelsLike = currentWeather?.main?.feels_like ?? null
+  const humidity = currentWeather?.main?.humidity ?? null
+  const windSpeedMs = currentWeather?.wind?.speed ?? null
+  const windSpeedKmh =
+    typeof windSpeedMs === 'number' ? Math.round(windSpeedMs * 3.6) : null
+
+  let dailyForecast = []
+  let minTemp = null
+  let maxTemp = null
+  let chanceOfRain = null
+
+  if (forecast?.list && forecast.list.length > 0) {
+    const temps = forecast.list
+      .map((item) => item.main?.temp)
+      .filter((t) => typeof t === 'number')
+
+    if (temps.length > 0) {
+      minTemp = Math.floor(Math.min(...temps))
+      maxTemp = Math.ceil(Math.max(...temps))
+    }
+
+    const byDay = new Map()
+
+    forecast.list.forEach((item) => {
+      const date = new Date(item.dt * 1000)
+      const dayKey = date.toISOString().slice(0, 10)
+      const temp = item.main?.temp
+      if (typeof temp !== 'number') return
+
+      const weatherMain = item.weather?.[0]?.main || ''
+
+      const existing =
+        byDay.get(dayKey) || {
+          min: temp,
+          max: temp,
+          dt: item.dt,
+          weatherMain,
+        }
+
+      existing.min = Math.min(existing.min, temp)
+      existing.max = Math.max(existing.max, temp)
+      if (item.dt < existing.dt) {
+        existing.dt = item.dt
+        existing.weatherMain = weatherMain
+      }
+
+      byDay.set(dayKey, existing)
+    })
+
+    const dayEntries = Array.from(byDay.entries())
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .slice(0, 7)
+
+    const pickIcon = (weatherMainValue) => {
+      const main = (weatherMainValue || '').toLowerCase()
+      if (main.includes('rain') || main.includes('drizzle') || main.includes('thunder')) {
+        return CloudRain
+      }
+      if (main.includes('cloud')) {
+        return CloudSun
+      }
+      if (main.includes('clear')) {
+        return Sun
+      }
+      return CloudSun
+    }
+
+    dailyForecast = dayEntries.map(([dayKey, info]) => {
+      const date = new Date(dayKey)
+      const label = date
+        .toLocaleDateString('en-US', { weekday: 'short' })
+        .toUpperCase()
+
+      return {
+        day: label,
+        high: Math.round(info.max),
+        low: Math.round(info.min),
+        icon: pickIcon(info.weatherMain),
+      }
+    })
+
+    const nextWindow = forecast.list.slice(0, 8)
+    const pops = nextWindow
+      .map((item) => item.pop)
+      .filter((p) => typeof p === 'number')
+
+    if (pops.length > 0) {
+      chanceOfRain = Math.round(Math.max(...pops) * 100)
+    }
+  }
+
+  const effectiveMin =
+    typeof minTemp === 'number'
+      ? minTemp
+      : currentTemp != null
+      ? Math.floor(currentTemp - 10)
+      : 0
+
+  const effectiveMax =
+    typeof maxTemp === 'number'
+      ? maxTemp
+      : currentTemp != null
+      ? Math.ceil(currentTemp + 10)
+      : 40
+
+  const range = effectiveMax - effectiveMin || 1
+  const clamped =
+    currentTemp != null
+      ? Math.min(Math.max(currentTemp - effectiveMin, 0), range)
+      : 0
+  const progress = clamped / range
+
+  const displayDate = currentWeather
+    ? new Date(currentWeather.dt * 1000)
+    : new Date()
 
   return (
     <div className="flex min-h-screen w-screen bg-[#080810] text-white overflow-hidden">
@@ -81,7 +225,7 @@ function App() {
           </header>
 
           <div className="flex flex-col gap-2 font-mono">
-            {DAILY_FORECAST.map((day) => {
+            {(dailyForecast.length ? dailyForecast : []).map((day) => {
               const Icon = day.icon
               return (
                 <div
@@ -112,6 +256,11 @@ function App() {
                 </div>
               )
             })}
+            {!dailyForecast.length && !loading && (
+              <span className="mt-2 text-[11px] text-[#6f6f93]">
+                No forecast data available.
+              </span>
+            )}
           </div>
         </section>
 
@@ -130,14 +279,15 @@ function App() {
               <div className="flex items-center gap-2 text-xs text-[#b8a7ff]">
                 <MapPin className="h-3 w-3 text-[#00b4fc]" />
                 <span>
-                  {CITY}, {COUNTRY}
+                  {city}
+                  {country ? `, ${country}` : ''}
                 </span>
               </div>
             </div>
             <div className="flex flex-col items-end text-[11px] text-[#8f8fb0]">
               <span className="flex items-center gap-1">
                 <CalendarDays className="h-3 w-3 text-[#9b5de5]" />
-                <span>{formatDate(today)}</span>
+                <span>{formatDate(displayDate)}</span>
               </span>
               <span className="mt-1 h-[1px] w-16 bg-gradient-to-l from-[#00b4fc] via-[#9b5de5] to-transparent" />
             </div>
@@ -195,12 +345,12 @@ function App() {
                   </div>
                   <div className="mt-2 flex items-end">
                     <span className="text-4xl font-semibold text-white">
-                      {CURRENT_TEMP}
+                      {currentTemp != null ? Math.round(currentTemp) : '—'}
                     </span>
                     <span className="ml-1 text-sm text-[#b8a7ff]">°C</span>
                   </div>
                   <span className="mt-1 text-[10px] text-[#6f6f93]">
-                    Min {MIN_TEMP}° / Max {MAX_TEMP}°
+                    Min {Math.round(effectiveMin)}° / Max {Math.round(effectiveMax)}°
                   </span>
                 </div>
               </div>
@@ -208,7 +358,7 @@ function App() {
 
             <div className="mt-6 flex flex-col items-center gap-1">
               <span className="text-xs tracking-[0.24em] uppercase text-[#8f8fb0]">
-                {CONDITION}
+                {condition}
               </span>
               <div className="flex items-center gap-2 text-sm text-[#b8a7ff]">
                 <SunMedium className="h-4 w-4 text-[#ffdd7a]" />
@@ -223,28 +373,38 @@ function App() {
           <div className="grid grid-cols-2 gap-3">
             <StatPanel
               label="Humidity"
-              value="65"
+              value={
+                humidity != null ? Math.round(humidity) : loading ? '…' : '—'
+              }
               unit="%"
               detail="Comfort zone • Slightly humid"
               icon={Droplets}
             />
             <StatPanel
               label="Wind speed"
-              value="14"
+              value={
+                windSpeedKmh != null
+                  ? windSpeedKmh
+                  : loading
+                  ? '…'
+                  : '—'
+              }
               unit="km/h"
               detail="Crosswind minimal • NNE"
               icon={Wind}
             />
             <StatPanel
               label="UV index"
-              value="5"
-              unit="/ 11"
-              detail="Moderate • Protection recommended"
+              value="N/A"
+              unit=""
+              detail="UV data not available from this endpoint"
               icon={Sun}
             />
             <StatPanel
               label="Feels like"
-              value="21"
+              value={
+                feelsLike != null ? Math.round(feelsLike) : loading ? '…' : '—'
+              }
               unit="°C"
               detail="Cabin comfort optimal"
               icon={ThermometerSun}
@@ -254,9 +414,15 @@ function App() {
           <div className="mt-1 grid grid-cols-1">
             <StatPanel
               label="Chance of rain"
-              value="20"
+              value={
+                chanceOfRain != null
+                  ? chanceOfRain
+                  : loading
+                  ? '…'
+                  : '—'
+              }
               unit="%"
-              detail="Light showers possible in next 3 hrs"
+              detail="Light showers possible in next few hours"
               icon={Umbrella}
             />
           </div>
